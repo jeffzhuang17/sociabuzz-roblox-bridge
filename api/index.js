@@ -2,12 +2,8 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
-// Upstash Redis (gratis di upstash.com)
-// Set environment variable: UPSTASH_REDIS_REST_URL dan UPSTASH_REDIS_REST_TOKEN
 const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-// Opsional: secret token untuk keamanan webhook
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || null;
 
 const defaultDonation = { 
@@ -18,9 +14,8 @@ const defaultDonation = {
     timestamp: 0 
 };
 
-// Helper: simpan ke Redis
 async function setLatest(data) {
-    if (!REDIS_URL) return; // fallback jika Redis belum dikonfigurasi
+    if (!REDIS_URL) return;
     await fetch(`${REDIS_URL}/set/latestDonation`, {
         method: 'POST',
         headers: {
@@ -31,7 +26,6 @@ async function setLatest(data) {
     });
 }
 
-// Helper: ambil dari Redis
 async function getLatest() {
     if (!REDIS_URL) return defaultDonation;
     try {
@@ -53,7 +47,6 @@ app.get('/api/donations/latest', async (req, res) => {
 });
 
 app.post('/api/webhook/sociabuzz', async (req, res) => {
-    // Cek secret jika dikonfigurasi
     if (WEBHOOK_SECRET) {
         const token = req.headers['x-webhook-secret'] || req.query.secret;
         if (token !== WEBHOOK_SECRET) {
@@ -64,17 +57,15 @@ app.post('/api/webhook/sociabuzz', async (req, res) => {
 
     const d = req.body.data || req.body;
 
-    // Pencarian nama agresif
     const name = d.donator_name 
                || d.sender_name 
                || d.name 
                || d.supporter_name 
                || "Anonymous";
 
-    // Pembersihan nominal
-    let rawAmount  = d.amount_raw || d.amount || 0;
-    let cleanAmt   = String(rawAmount).replace(/\D/g, "");
-    const amount   = parseInt(cleanAmt) || 0;
+    let rawAmount = d.amount_raw || d.amount || 0;
+    let cleanAmt  = String(rawAmount).replace(/\D/g, "");
+    const amount  = parseInt(cleanAmt) || 0;
 
     if (amount > 0 && name !== "Anonymous" && name.trim() !== "") {
         const donation = {
