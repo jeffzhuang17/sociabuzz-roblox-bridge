@@ -5,12 +5,12 @@ app.use(express.json());
 const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-const defaultDonation = { 
-    id: "START", 
-    donator: "System", 
-    amount: 0, 
-    message: "Ready", 
-    timestamp: 0 
+const defaultDonation = {
+    id:        "START",
+    donator:   "System",
+    amount:    0,
+    message:   "Ready",
+    timestamp: 0
 };
 
 async function setLatest(data) {
@@ -19,7 +19,7 @@ async function setLatest(data) {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${REDIS_TOKEN}`,
-            'Content-Type': 'application/json'
+            'Content-Type':  'application/json'
         },
         body: JSON.stringify({ value: JSON.stringify(data) })
     });
@@ -41,41 +41,52 @@ async function getLatest() {
 app.get('/', (req, res) => res.send("SERVER JJ STUDIO AKTIF - ANTI ANONYMOUS MODE"));
 
 app.get('/api/donations/latest', async (req, res) => {
-    const data = await getLatest();
-    res.json(data);
+    try {
+        const data = await getLatest();
+        res.json(data);
+    } catch {
+        res.json(defaultDonation);
+    }
 });
 
 app.post('/api/webhook/sociabuzz', async (req, res) => {
     console.log("📨 Headers:", JSON.stringify(req.headers));
-    console.log("📦 Body:", JSON.stringify(req.body));
+    console.log("📦 Body:",    JSON.stringify(req.body));
 
-    const d = req.body.data || req.body;
+    try {
+        const d = req.body.data || req.body;
 
-    const name = d.donator_name 
-               || d.sender_name 
-               || d.name 
-               || d.supporter_name 
-               || "Anonymous";
+        const name = (
+            d.donator_name   ||
+            d.sender_name    ||
+            d.name           ||
+            d.supporter_name ||
+            ""
+        ).trim();
 
-    let rawAmount = d.amount_raw || d.amount || 0;
-    let cleanAmt  = String(rawAmount).replace(/\D/g, "");
-    const amount  = parseInt(cleanAmt) || 0;
+        const rawAmount = d.amount_raw || d.amount || 0;
+        const amount    = parseInt(String(rawAmount).replace(/\D/g, "")) || 0;
 
-    if (amount >= 0 && name.trim() !== "") {
-        const donation = {
-            id:        d.order_id || d.transaction_id || Date.now().toString(),
-            donator:   name.trim(),
-            amount:    amount,
-            message:   d.message || "",
-            timestamp: Math.floor(Date.now() / 1000)
-        };
-
-        await setLatest(donation);
-        console.log("✅ Donasi Diterima dari:", name, "Sebesar:", amount);
-        res.status(200).send("OK");
-    } else {
-        console.log("⚠️ Diabaikan: nama kosong");
-        res.status(200).send("IGNORED");
+        // FIX: amount > 0 (bukan >= 0) + tolak anonymous
+        if (amount > 0 && name !== "" && name.toLowerCase() !== "anonymous") {
+            const donation = {
+                id:        d.order_id || d.transaction_id || Date.now().toString(),
+                donator:   name,
+                amount:    amount,
+                message:   (d.message || "").trim(),
+                timestamp: Math.floor(Date.now() / 1000)
+            };
+            await setLatest(donation);
+            console.log("✅ Donasi Diterima dari:", name, "Sebesar:", amount);
+            res.status(200).send("OK");
+        } else {
+            console.log("⚠️ Diabaikan: nama kosong/anonymous atau amount 0");
+            res.status(200).send("IGNORED");
+        }
+    } catch (err) {
+        // FIX: tangkap error agar server tidak crash
+        console.error("❌ Webhook error:", err.message);
+        res.status(500).send("ERROR");
     }
 });
 
