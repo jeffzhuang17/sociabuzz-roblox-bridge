@@ -46,7 +46,6 @@ app.get('/api/donations/latest', async (req, res) => {
 });
 
 app.post('/api/webhook/sociabuzz', async (req, res) => {
-    // Log headers untuk debug
     console.log("📨 Headers:", JSON.stringify(req.headers));
     console.log("📦 Body:", JSON.stringify(req.body));
 
@@ -62,7 +61,7 @@ app.post('/api/webhook/sociabuzz', async (req, res) => {
     let cleanAmt  = String(rawAmount).replace(/\D/g, "");
     const amount  = parseInt(cleanAmt) || 0;
 
-    if (amount > 0 && name !== "Anonymous" && name.trim() !== "") {
+    if (amount >= 0 && name.trim() !== "") {
         const donation = {
             id:        d.order_id || d.transaction_id || Date.now().toString(),
             donator:   name.trim(),
@@ -75,7 +74,7 @@ app.post('/api/webhook/sociabuzz', async (req, res) => {
         console.log("✅ Donasi Diterima dari:", name, "Sebesar:", amount);
         res.status(200).send("OK");
     } else {
-        console.log("⚠️ Diabaikan: Anonymous atau nominal 0");
+        console.log("⚠️ Diabaikan: nama kosong");
         res.status(200).send("IGNORED");
     }
 });
