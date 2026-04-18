@@ -50,42 +50,31 @@ app.get('/api/donations/latest', async (req, res) => {
 });
 
 app.post('/api/webhook/sociabuzz', async (req, res) => {
-    console.log("📨 Headers:", JSON.stringify(req.headers));
-    console.log("📦 Body:",    JSON.stringify(req.body));
+    // LOG SEMUA — untuk debug format payload Sociabuzz
+    console.log("📨 HEADERS:", JSON.stringify(req.headers));
+    console.log("📦 BODY:", JSON.stringify(req.body));
+    console.log("📋 BODY KEYS:", Object.keys(req.body || {}).join(", "));
 
+    // Cek apakah ada nested data
+    const d = req.body.data || req.body;
+    console.log("📋 D KEYS:", Object.keys(d || {}).join(", "));
+    console.log("📋 D VALUES:", JSON.stringify(d));
+
+    // Terima semua untuk sekarang, simpan apapun yang masuk
     try {
-        const d = req.body.data || req.body;
-
-        const name = (
-            d.donator_name   ||
-            d.sender_name    ||
-            d.name           ||
-            d.supporter_name ||
-            ""
-        ).trim();
-
-        const rawAmount = d.amount_raw || d.amount || 0;
-        const amount    = parseInt(String(rawAmount).replace(/\D/g, "")) || 0;
-
-        // FIX: amount > 0 (bukan >= 0) + tolak anonymous
-        if (amount > 0 && name !== "" && name.toLowerCase() !== "anonymous") {
-            const donation = {
-                id:        d.order_id || d.transaction_id || Date.now().toString(),
-                donator:   name,
-                amount:    amount,
-                message:   (d.message || "").trim(),
-                timestamp: Math.floor(Date.now() / 1000)
-            };
-            await setLatest(donation);
-            console.log("✅ Donasi Diterima dari:", name, "Sebesar:", amount);
-            res.status(200).send("OK");
-        } else {
-            console.log("⚠️ Diabaikan: nama kosong/anonymous atau amount 0");
-            res.status(200).send("IGNORED");
-        }
+        const donation = {
+            id:        d.order_id || d.transaction_id || Date.now().toString(),
+            donator:   d.donator_name || d.sender_name || d.name || d.supporter_name || d.donator || "UNKNOWN",
+            amount:    parseInt(String(d.amount_raw || d.amount || 0).replace(/\D/g, "")) || 0,
+            message:   d.message || "",
+            timestamp: Math.floor(Date.now() / 1000),
+            raw:       JSON.stringify(d) // simpan raw untuk debug
+        };
+        console.log("✅ PARSED:", JSON.stringify(donation));
+        await setLatest(donation);
+        res.status(200).send("OK");
     } catch (err) {
-        // FIX: tangkap error agar server tidak crash
-        console.error("❌ Webhook error:", err.message);
+        console.error("❌ Error:", err.message);
         res.status(500).send("ERROR");
     }
 });
