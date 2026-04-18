@@ -2,9 +2,8 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
-const REDIS_URL      = process.env.UPSTASH_REDIS_REST_URL;
-const REDIS_TOKEN    = process.env.UPSTASH_REDIS_REST_TOKEN;
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || null;
+const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
 const defaultDonation = { 
     id: "START", 
@@ -47,15 +46,9 @@ app.get('/api/donations/latest', async (req, res) => {
 });
 
 app.post('/api/webhook/sociabuzz', async (req, res) => {
-    if (WEBHOOK_SECRET) {
-        const token = req.headers['x-webhook-token'] 
-                   || req.headers['x-webhook-secret'] 
-                   || req.query.secret;
-        if (token !== WEBHOOK_SECRET) {
-            console.log("⛔ Webhook ditolak: secret tidak cocok");
-            return res.status(403).send("Forbidden");
-        }
-    }
+    // Log headers untuk debug
+    console.log("📨 Headers:", JSON.stringify(req.headers));
+    console.log("📦 Body:", JSON.stringify(req.body));
 
     const d = req.body.data || req.body;
 
