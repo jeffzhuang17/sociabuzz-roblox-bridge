@@ -50,19 +50,15 @@ app.get('/api/donations/latest', async (req, res) => {
 });
 
 app.post('/api/webhook/sociabuzz', async (req, res) => {
-    console.log("📨 HEADERS:", JSON.stringify(req.headers));
     console.log("📦 BODY RAW:", JSON.stringify(req.body));
 
     try {
-        // Sociabuzz bisa kirim nested di .data atau langsung di root
         const d = req.body.data || req.body;
-        console.log("📋 D:", JSON.stringify(d));
 
-        // ── Ambil nama donatur ──────────────────────────────────────
-        // Sociabuzz Tip:     supporter_name
-        // Sociabuzz Sticker: supporter_name
-        // Fallback lain:     donator_name, sender_name, name, donator
+        // ── Nama donatur ──────────────────────────────────────────
+        // Sociabuzz kirim field: "supporter" (confirmed dari log)
         const rawName = (
+            d.supporter      ||  // ✅ field utama Sociabuzz
             d.supporter_name ||
             d.donator_name   ||
             d.sender_name    ||
@@ -71,32 +67,36 @@ app.post('/api/webhook/sociabuzz', async (req, res) => {
             ""
         ).toString().trim();
 
-        // Skip anonymous & kosong
+        console.log("👤 Nama donatur:", rawName);
+
         if (!rawName || rawName.toLowerCase() === "anonymous") {
             console.warn("⚠️ Skip: nama kosong atau anonymous");
             return res.status(200).send("SKIP_ANONYMOUS");
         }
 
-        // ── Ambil amount ────────────────────────────────────────────
-        // amount bisa string "50000" atau number, strip non-digit
+        // ── Amount ────────────────────────────────────────────────
+        // Sociabuzz kirim field: "amount" (confirmed dari log)
         const rawAmount = d.amount_raw || d.amount || d.net_amount || 0;
         const amount = parseInt(String(rawAmount).replace(/\D/g, "")) || 0;
+
+        console.log("💰 Amount:", amount);
 
         if (amount <= 0) {
             console.warn("⚠️ Skip: amount <= 0");
             return res.status(200).send("SKIP_ZERO");
         }
 
-        // ── Buat ID unik & stabil ───────────────────────────────────
-        // Pakai order_id jika ada, fallback: hash dari nama+amount+waktu menit
-        // (pakai waktu menit agar tidak double dalam 1 menit untuk donasi sama)
-        const minuteBlock = Math.floor(Date.now() / 60000);
+        // ── ID unik & stabil ──────────────────────────────────────
+        // Sociabuzz kirim field: "id" (confirmed dari log)
         const stableId = (
+            d.id               ||
             d.order_id         ||
             d.transaction_id   ||
             d.invoice_id       ||
-            `${rawName.toLowerCase()}_${amount}_${minuteBlock}`
+            `${rawName.toLowerCase()}_${amount}_${Math.floor(Date.now() / 60000)}`
         ).toString();
+
+        console.log("🆔 Donation ID:", stableId);
 
         const donation = {
             id:        stableId,
@@ -106,7 +106,7 @@ app.post('/api/webhook/sociabuzz', async (req, res) => {
             timestamp: Math.floor(Date.now() / 1000),
         };
 
-        console.log("✅ PARSED DONATION:", JSON.stringify(donation));
+        console.log("✅ DONATION TERSIMPAN:", JSON.stringify(donation));
         await setLatest(donation);
         res.status(200).send("OK");
 
