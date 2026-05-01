@@ -56,9 +56,9 @@ app.post('/api/webhook/sociabuzz', async (req, res) => {
         const d = req.body.data || req.body;
 
         // ── Nama donatur ──────────────────────────────────────────
-        // Sociabuzz kirim field: "supporter" (confirmed dari log)
+        // Field "supporter" confirmed dari log Sociabuzz
         const rawName = (
-            d.supporter      ||  // ✅ field utama Sociabuzz
+            d.supporter      ||
             d.supporter_name ||
             d.donator_name   ||
             d.sender_name    ||
@@ -67,7 +67,7 @@ app.post('/api/webhook/sociabuzz', async (req, res) => {
             ""
         ).toString().trim();
 
-        console.log("👤 Nama donatur:", rawName);
+        console.log("👤 Nama:", rawName);
 
         if (!rawName || rawName.toLowerCase() === "anonymous") {
             console.warn("⚠️ Skip: nama kosong atau anonymous");
@@ -75,7 +75,6 @@ app.post('/api/webhook/sociabuzz', async (req, res) => {
         }
 
         // ── Amount ────────────────────────────────────────────────
-        // Sociabuzz kirim field: "amount" (confirmed dari log)
         const rawAmount = d.amount_raw || d.amount || d.net_amount || 0;
         const amount = parseInt(String(rawAmount).replace(/\D/g, "")) || 0;
 
@@ -86,24 +85,26 @@ app.post('/api/webhook/sociabuzz', async (req, res) => {
             return res.status(200).send("SKIP_ZERO");
         }
 
-        // ── ID unik & stabil ──────────────────────────────────────
-        // Sociabuzz kirim field: "id" (confirmed dari log)
-        const stableId = (
-            d.id               ||
-            d.order_id         ||
-            d.transaction_id   ||
-            d.invoice_id       ||
-            `${rawName.toLowerCase()}_${amount}_${Math.floor(Date.now() / 60000)}`
+        // ── ID dari Sociabuzz ─────────────────────────────────────
+        const donationId = (
+            d.id             ||
+            d.order_id       ||
+            d.transaction_id ||
+            d.invoice_id     ||
+            `${rawName.toLowerCase()}_${amount}_${Date.now()}`
         ).toString();
 
-        console.log("🆔 Donation ID:", stableId);
+        // ── TIMESTAMP — selalu pakai waktu SEKARANG saat webhook diterima ──
+        // KUNCI UTAMA: Roblox deteksi donasi baru via timestamp bukan ID
+        // Jangan pakai d.created_at dari Sociabuzz karena bisa sama/lama
+        const nowTimestamp = Math.floor(Date.now() / 1000);
 
         const donation = {
-            id:        stableId,
+            id:        donationId,
             donator:   rawName,
             amount:    amount,
             message:   (d.message || d.note || "").toString().trim(),
-            timestamp: Math.floor(Date.now() / 1000),
+            timestamp: nowTimestamp,
         };
 
         console.log("✅ DONATION TERSIMPAN:", JSON.stringify(donation));
