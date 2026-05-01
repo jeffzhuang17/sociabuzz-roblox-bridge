@@ -32,20 +32,45 @@ async function getLatest() {
             headers: { 'Authorization': `Bearer ${REDIS_TOKEN}` }
         });
         const json = await res.json();
-        return json.result ? JSON.parse(json.result) : defaultDonation;
-    } catch {
+        if (json.result) {
+            const parsed = JSON.parse(json.result);
+            // Pastikan semua field ada dan tipe data benar
+            return {
+                id:        String(parsed.id        || "START"),
+                donator:   String(parsed.donator   || "System"),
+                amount:    Number(parsed.amount    || 0),
+                message:   String(parsed.message   || ""),
+                timestamp: Number(parsed.timestamp || 0)
+            };
+        }
+        return defaultDonation;
+    } catch (err) {
+        console.error("getLatest error:", err.message);
         return defaultDonation;
     }
 }
 
-app.get('/', (req, res) => res.send("SERVER JJ STUDIO AKTIF - ANTI ANONYMOUS MODE"));
+// Middleware: izinkan semua origin + set content-type JSON
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "*");
+    next();
+});
+
+app.get('/', (req, res) => {
+    res.setHeader('Content-Type', 'text/plain');
+    res.send("SERVER JJ STUDIO AKTIF");
+});
 
 app.get('/api/donations/latest', async (req, res) => {
     try {
         const data = await getLatest();
-        res.json(data);
-    } catch {
-        res.json(defaultDonation);
+        res.setHeader('Content-Type', 'application/json');
+        res.status(200).json(data);
+    } catch (err) {
+        console.error("GET latest error:", err.message);
+        res.setHeader('Content-Type', 'application/json');
+        res.status(200).json(defaultDonation);
     }
 });
 
@@ -55,7 +80,6 @@ app.post('/api/webhook/sociabuzz', async (req, res) => {
     try {
         const d = req.body.data || req.body;
 
-        // ── Nama donatur ──────────────────────────────────────────
         // Field "supporter" confirmed dari log Sociabuzz
         const rawName = (
             d.supporter      ||
@@ -74,7 +98,6 @@ app.post('/api/webhook/sociabuzz', async (req, res) => {
             return res.status(200).send("SKIP_ANONYMOUS");
         }
 
-        // ── Amount ────────────────────────────────────────────────
         const rawAmount = d.amount_raw || d.amount || d.net_amount || 0;
         const amount = parseInt(String(rawAmount).replace(/\D/g, "")) || 0;
 
@@ -85,7 +108,6 @@ app.post('/api/webhook/sociabuzz', async (req, res) => {
             return res.status(200).send("SKIP_ZERO");
         }
 
-        // ── ID dari Sociabuzz ─────────────────────────────────────
         const donationId = (
             d.id             ||
             d.order_id       ||
@@ -94,9 +116,7 @@ app.post('/api/webhook/sociabuzz', async (req, res) => {
             `${rawName.toLowerCase()}_${amount}_${Date.now()}`
         ).toString();
 
-        // ── TIMESTAMP — selalu pakai waktu SEKARANG saat webhook diterima ──
-        // KUNCI UTAMA: Roblox deteksi donasi baru via timestamp bukan ID
-        // Jangan pakai d.created_at dari Sociabuzz karena bisa sama/lama
+        // Timestamp selalu waktu sekarang saat webhook diterima
         const nowTimestamp = Math.floor(Date.now() / 1000);
 
         const donation = {
